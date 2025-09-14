@@ -117,8 +117,10 @@ class FolderCompareApp:
         self.txt_plus.pack(side=tk.LEFT, padx=5)
         self.txt_minus = ttk.Button(self.button_frame, text="Content Font -", command=lambda: self.change_content_font(-1))
         self.txt_minus.pack(side=tk.LEFT, padx=5)
-        self.font_select = ttk.Button(self.button_frame, text="Choose Font", command=self.select_font_dialog)
-        self.font_select.pack(side=tk.LEFT, padx=5)
+        self.ui_font_select = ttk.Button(self.button_frame, text="Choose UI Font", command=self.select_ui_font_dialog)
+        self.ui_font_select.pack(side=tk.LEFT, padx=5)
+        self.text_font_select = ttk.Button(self.button_frame, text="Choose Content Font", command=self.select_text_font_dialog)
+        self.text_font_select.pack(side=tk.LEFT, padx=5)
         self.reset_font_btn = ttk.Button(self.button_frame, text="Reset Fonts", command=self.reset_fonts)
         self.reset_font_btn.pack(side=tk.LEFT, padx=5)
 
@@ -156,9 +158,43 @@ class FolderCompareApp:
         self.left_list.config(font=self.text_font)
         self.right_list.config(font=self.text_font)
 
-    def select_font_dialog(self):
+    def select_ui_font_dialog(self):
         win = tk.Toplevel(self.root)
-        win.title("Font Selection")
+        win.title("UI Font Selection")
+
+        tk.Label(win, text="Font Family:").grid(row=0, column=0, padx=5, pady=5)
+        families = list(font.families())
+        families.sort()
+        family_var = tk.StringVar(value=self.ui_font.cget("family"))
+        family_box = ttk.Combobox(win, textvariable=family_var, values=families, width=30)
+        family_box.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(win, text="Font Size:").grid(row=1, column=0, padx=5, pady=5)
+        size_var = tk.IntVar(value=self.ui_font.cget("size"))
+        size_spin = tk.Spinbox(win, from_=6, to=72, textvariable=size_var, width=5)
+        size_spin.grid(row=1, column=1, padx=5, pady=5)
+
+        preview_label = tk.Label(win, text="Preview Text", width=30, anchor="center")
+        preview_label.grid(row=2, column=0, columnspan=2, pady=10)
+
+        def update_preview(*args):
+            preview_label.config(font=(family_var.get(), size_var.get()))
+
+        family_var.trace("w", update_preview)
+        size_var.trace("w", update_preview)
+        update_preview()
+
+        def apply_font():
+            self.ui_font.configure(family=family_var.get(), size=size_var.get())
+            self.left_list.config(font=self.ui_font)
+            self.right_list.config(font=self.ui_font)
+            win.destroy()
+
+        ttk.Button(win, text="Apply UI Font", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
+
+    def select_text_font_dialog(self):
+        win = tk.Toplevel(self.root)
+        win.title("Content Font Selection")
 
         tk.Label(win, text="Font Family:").grid(row=0, column=0, padx=5, pady=5)
         families = list(font.families())
@@ -188,7 +224,7 @@ class FolderCompareApp:
             self.right_list.config(font=self.text_font)
             win.destroy()
 
-        ttk.Button(win, text="Apply", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
+        ttk.Button(win, text="Apply Content Font", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
 
     def on_ctrl_mousewheel(self, event):
         delta = 1 if event.delta > 0 else -1
