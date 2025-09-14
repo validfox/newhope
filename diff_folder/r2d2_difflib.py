@@ -281,9 +281,9 @@ class FolderCompareApp:
         matcher = difflib.SequenceMatcher(None, left_lines, right_lines)
         opcodes = matcher.get_opcodes()
 
-        max_lines = max(len(left_lines), len(right_lines))
-        self.update_line_numbers(self.left_line_numbers, max_lines)
-        self.update_line_numbers(self.right_line_numbers, max_lines)
+        #max_lines = max(len(left_lines), len(right_lines))
+        self.update_line_numbers(self.left_line_numbers, len(left_lines))
+        self.update_line_numbers(self.right_line_numbers, len(right_lines))
 
         for tag, i1, i2, j1, j2 in opcodes:
             if tag == "equal":
