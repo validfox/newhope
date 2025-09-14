@@ -87,7 +87,13 @@ class FolderCompareApp:
         self.left_text.config(yscrollcommand=self.vscrollbar.set)
         self.right_text.config(yscrollcommand=self.vscrollbar.set)
 
-        # Mouse wheel bindings
+        # Disable mouse scroll on line numbers
+        for widget in (self.left_line_numbers, self.right_line_numbers):
+            widget.bind("<MouseWheel>", lambda e: "break")
+            widget.bind("<Button-4>", lambda e: "break")
+            widget.bind("<Button-5>", lambda e: "break")
+
+        # Mouse wheel bindings (content only)
         for widget in (self.left_text, self.right_text):
             widget.bind("<MouseWheel>", self.on_mousewheel)
             widget.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
@@ -138,7 +144,7 @@ class FolderCompareApp:
         self.right_folder = ""
         self.left_file = ""
         self.right_file = ""
-        self.diff_lines = []
+        self.diff_ranges = []
         self.current_diff_index = -1
 
     # -------- Font handling --------
@@ -269,7 +275,7 @@ class FolderCompareApp:
         self.left_text.delete("1.0", tk.END)
         self.right_text.delete("1.0", tk.END)
 
-        self.diff_lines = []
+        self.diff_ranges = []
         self.current_diff_index = -1
 
         matcher = difflib.SequenceMatcher(None, left_lines, right_lines)
@@ -285,84 +291,66 @@ class FolderCompareApp:
                     self.left_text.insert(tk.END, left_lines[i])
                 for j in range(j1, j2):
                     self.right_text.insert(tk.END, right_lines[j])
-            elif tag == "replace":
-                for i in range(i1, i2):
-                    self.left_text.insert(tk.END, left_lines[i], "replace")
-                    self.diff_lines.append(i + 1)
-                for j in range(j1, j2):
-                    self.right_text.insert(tk.END, right_lines[j], "replace")
-                    self.diff_lines.append(j + 1)
-            elif tag == "delete":
-                for i in range(i1, i2):
-                    self.left_text.insert(tk.END, left_lines[i], "delete")
-                    self.diff_lines.append(i + 1)
-            elif tag == "insert":
-                for j in range(j1, j2):
-                    self.right_text.insert(tk.END, right_lines[j], "insert")
-                    self.diff_lines.append(j + 1)
+            else:
+                self.diff_ranges.append(((i1+1, i2), (j1+1, j2)))
+                if tag in ("replace", "delete"):
+                    for i in range(i1, i2):
+                        self.left_text.insert(tk.END, left_lines[i], tag)
+                if tag in ("replace", "insert"):
+                    for j in range(j1, j2):
+                        self.right_text.insert(tk.END, right_lines[j], tag)
 
-        # configure tags
         self.left_text.tag_config("replace", background="lightyellow")
         self.right_text.tag_config("replace", background="lightyellow")
         self.left_text.tag_config("delete", background="lightcoral")
         self.right_text.tag_config("insert", background="lightgreen")
+        self.left_text.tag_config("current_diff", background="orange")
+        self.right_text.tag_config("current_diff", background="orange")
 
         left_name = os.path.basename(self.left_file)
         right_name = os.path.basename(self.right_file)
-        if self.diff_lines:
+        if self.diff_ranges:
             self.status_left.config(text=f"Comparing: {left_name} <-> {right_name}")
-            self.status_right.config(text=f"{len(self.diff_lines)} differences")
+            self.status_right.config(text=f"{len(self.diff_ranges)} differences")
         else:
             self.status_left.config(text=f"Comparing: {left_name} <-> {right_name}")
             self.status_right.config(text="Files are identical")
 
     # -------- Diff navigation --------
     def goto_diff(self, index):
-        if not self.diff_lines:
+        if not self.diff_ranges:
             return
-        if index < 0 or index >= len(self.diff_lines):
+        if index < 0 or index >= len(self.diff_ranges):
             return
 
         self.current_diff_index = index
-        line = self.diff_lines[self.current_diff_index]
-
-        self.left_text.see(f"{line}.0")
-        self.right_text.see(f"{line}.0")
-        self.left_line_numbers.see(f"{line}.0")
-        self.right_line_numbers.see(f"{line}.0")
+        (l_start, l_end), (r_start, r_end) = self.diff_ranges[index]
 
         self.left_text.tag_remove("current_diff", "1.0", tk.END)
         self.right_text.tag_remove("current_diff", "1.0", tk.END)
 
-        self.left_text.tag_add("current_diff", f"{line}.0", f"{line}.end")
-        self.right_text.tag_add("current_diff", f"{line}.0", f"{line}.end")
+        if l_start <= l_end:
+            self.left_text.tag_add("current_diff", f"{l_start}.0", f"{l_end}.0 lineend")
+        if r_start <= r_end:
+            self.right_text.tag_add("current_diff", f"{r_start}.0", f"{r_end}.0 lineend")
 
-        self.left_text.tag_config("current_diff", background="orange")
-        self.right_text.tag_config("current_diff", background="orange")
+        self.left_text.see(f"{l_start}.0")
+        self.right_text.see(f"{r_start}.0")
+        self.left_line_numbers.see(f"{l_start}.0")
+        self.right_line_numbers.see(f"{r_start}.0")
 
-        self.status_right.config(text=f"Diff {self.current_diff_index+1}/{len(self.diff_lines)} (Line {line})")
+        self.status_right.config(text=f"Diff {self.current_diff_index+1}/{len(self.diff_ranges)} "
+                                      f"(Left {l_start}-{l_end}, Right {r_start}-{r_end})")
 
     def goto_next_diff(self):
-        if not self.diff_lines:
+        if not self.diff_ranges:
             return
-        if hasattr(self, "clicked_line") and self.clicked_line:
-            for i, l in enumerate(self.diff_lines):
-                if l > self.clicked_line:
-                    self.goto_diff(i)
-                    self.clicked_line = 0
-                    return
-        if self.current_diff_index < len(self.diff_lines) - 1:
+        if self.current_diff_index < len(self.diff_ranges) - 1:
             self.goto_diff(self.current_diff_index + 1)
 
     def goto_prev_diff(self):
-        if not self.diff_lines:
+        if not self.diff_ranges:
             return
-        if hasattr(self, "clicked_line") and self.clicked_line:
-            for i in reversed(range(len(self.diff_lines))):
-                if self.diff_lines[i] < self.clicked_line:
-                    self.goto_diff(i)
-                    self.clicked_line = 0
-                    return
         if self.current_diff_index > 0:
             self.goto_diff(self.current_diff_index - 1)
 
@@ -370,7 +358,7 @@ class FolderCompareApp:
         self.goto_diff(0)
 
     def goto_last_diff(self):
-        self.goto_diff(len(self.diff_lines) - 1)
+        self.goto_diff(len(self.diff_ranges) - 1)
 
     # -------- Sync scrolling --------
     def sync_scroll(self, *args):
@@ -405,9 +393,7 @@ class FolderCompareApp:
         return "break"
 
     def on_click_line(self, event):
-        index = event.widget.index(f"@{event.x},{event.y}")
-        self.clicked_line = int(index.split(".")[0])
-        return None
+        pass  # No special behavior for clicking lines
 
 
 if __name__ == "__main__":
