@@ -9,8 +9,8 @@ class FolderCompareApp:
         self.root.title("R2D2: A Folder Compare Tool")
 
         # Default font settings
-        self.default_ui_font = ("Arial", 10)
-        self.default_text_font = ("Consolas", 11)
+        self.default_ui_font = ("times", 10)
+        self.default_text_font = ("times", 11)
 
         # Fonts (shared)
         self.ui_font = font.Font(family=self.default_ui_font[0], size=self.default_ui_font[1])
@@ -158,19 +158,34 @@ class FolderCompareApp:
         self.left_list.config(font=self.text_font)
         self.right_list.config(font=self.text_font)
 
-    def select_ui_font_dialog(self):
-        win = tk.Toplevel(self.root)
-        win.title("UI Font Selection")
+    def open_font_dialog(self, target_font, dialog_attr, title, apply_callback=None):
+        # Prevent multiple dialogs
+        if getattr(self, dialog_attr, None) is not None:
+            getattr(self, dialog_attr).lift()
+            return
 
+        win = tk.Toplevel(self.root)
+        setattr(self, dialog_attr, win)
+        win.title(title)
+        win.transient(self.root)        # stay on top of main
+        win.grab_set()                  # modal
+        win.attributes("-topmost", True)
+
+        # When closed, reset reference
+        def on_close():
+            setattr(self, dialog_attr, None)
+            win.destroy()
+        win.protocol("WM_DELETE_WINDOW", on_close)
+
+        # --- dialog UI ---
         tk.Label(win, text="Font Family:").grid(row=0, column=0, padx=5, pady=5)
-        families = list(font.families())
-        families.sort()
-        family_var = tk.StringVar(value=self.ui_font.cget("family"))
+        families = sorted(font.families())
+        family_var = tk.StringVar(value=target_font.cget("family"))
         family_box = ttk.Combobox(win, textvariable=family_var, values=families, width=30)
         family_box.grid(row=0, column=1, padx=5, pady=5)
 
         tk.Label(win, text="Font Size:").grid(row=1, column=0, padx=5, pady=5)
-        size_var = tk.IntVar(value=self.ui_font.cget("size"))
+        size_var = tk.IntVar(value=target_font.cget("size"))
         size_spin = tk.Spinbox(win, from_=6, to=72, textvariable=size_var, width=5)
         size_spin.grid(row=1, column=1, padx=5, pady=5)
 
@@ -179,52 +194,36 @@ class FolderCompareApp:
 
         def update_preview(*args):
             preview_label.config(font=(family_var.get(), size_var.get()))
-
         family_var.trace("w", update_preview)
         size_var.trace("w", update_preview)
         update_preview()
 
         def apply_font():
-            self.ui_font.configure(family=family_var.get(), size=size_var.get())
-            self.left_list.config(font=self.ui_font)
-            self.right_list.config(font=self.ui_font)
-            win.destroy()
+            target_font.configure(family=family_var.get(), size=size_var.get())
+            if apply_callback:
+                apply_callback()
+            on_close()
 
-        ttk.Button(win, text="Apply UI Font", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
+        ttk.Button(win, text="Apply", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
+
+    # -------- Specific wrappers --------
+    def select_ui_font_dialog(self):
+        self.open_font_dialog(
+            target_font=self.ui_font,
+            dialog_attr="ui_font_dialog",
+            title="UI Font Selection"
+        )
 
     def select_text_font_dialog(self):
-        win = tk.Toplevel(self.root)
-        win.title("Content Font Selection")
-
-        tk.Label(win, text="Font Family:").grid(row=0, column=0, padx=5, pady=5)
-        families = list(font.families())
-        families.sort()
-        family_var = tk.StringVar(value=self.text_font.cget("family"))
-        family_box = ttk.Combobox(win, textvariable=family_var, values=families, width=30)
-        family_box.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(win, text="Font Size:").grid(row=1, column=0, padx=5, pady=5)
-        size_var = tk.IntVar(value=self.text_font.cget("size"))
-        size_spin = tk.Spinbox(win, from_=6, to=72, textvariable=size_var, width=5)
-        size_spin.grid(row=1, column=1, padx=5, pady=5)
-
-        preview_label = tk.Label(win, text="Preview Text", width=30, anchor="center")
-        preview_label.grid(row=2, column=0, columnspan=2, pady=10)
-
-        def update_preview(*args):
-            preview_label.config(font=(family_var.get(), size_var.get()))
-
-        family_var.trace("w", update_preview)
-        size_var.trace("w", update_preview)
-        update_preview()
-
-        def apply_font():
-            self.text_font.configure(family=family_var.get(), size=size_var.get())
-            self.left_list.config(font=self.text_font)
-            self.right_list.config(font=self.text_font)
-            win.destroy()
-
-        ttk.Button(win, text="Apply Content Font", command=apply_font).grid(row=3, column=0, columnspan=2, pady=10)
+        self.open_font_dialog(
+            target_font=self.text_font,
+            dialog_attr="text_font_dialog",
+            title="Content Font Selection",
+            apply_callback=lambda: (
+                self.left_list.config(font=self.text_font),
+                self.right_list.config(font=self.text_font)
+            )
+        )
 
     def on_ctrl_mousewheel(self, event):
         delta = 1 if event.delta > 0 else -1
