@@ -31,20 +31,22 @@ class FolderCompareApp:
         self.right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Left side
-        ttk.Label(self.left_frame, text="Left Folder", font=self.ui_font).pack(anchor="w")
+        self.left_topinfo = tk.StringVar(value="Left Folder")
+        ttk.Label(self.left_frame, textvariable=self.left_topinfo, font=self.ui_font).pack(anchor="w")
         self.left_btn = ttk.Button(self.left_frame, text="Select Folder", command=lambda: self.load_folder("left"))
         self.left_btn.pack(anchor="w", pady=2)
         self.left_list = tk.Listbox(self.left_frame, font=self.text_font, selectmode="browse",
-                                    selectbackground="lightblue")
+                                    selectbackground="lightblue", exportselection=False)
         self.left_list.pack(fill=tk.BOTH, expand=True)
         self.left_list.bind("<<ListboxSelect>>", self.file_selected)
 
         # Right side
-        ttk.Label(self.right_frame, text="Right Folder", font=self.ui_font).pack(anchor="w")
+        self.right_topinfo = tk.StringVar(value="Right Folder")
+        ttk.Label(self.right_frame, textvariable=self.right_topinfo, font=self.ui_font).pack(anchor="w")
         self.right_btn = ttk.Button(self.right_frame, text="Select Folder", command=lambda: self.load_folder("right"))
         self.right_btn.pack(anchor="w", pady=2)
         self.right_list = tk.Listbox(self.right_frame, font=self.text_font, selectmode="browse",
-                                     selectbackground="lightblue")
+                                     selectbackground="lightblue", exportselection=False)
         self.right_list.pack(fill=tk.BOTH, expand=True)
         self.right_list.bind("<<ListboxSelect>>", self.file_selected)
 
@@ -130,6 +132,8 @@ class FolderCompareApp:
         self.text_font_select.pack(side=tk.LEFT, padx=5)
         self.reset_font_btn = ttk.Button(self.button_frame, text="Reset Fonts", command=self.reset_fonts)
         self.reset_font_btn.pack(side=tk.LEFT, padx=5)
+        self.help_btn = ttk.Button(self.button_frame, text="Help", command=self.about_and_help)
+        self.help_btn.pack(side=tk.LEFT, padx=5)
 
         # Status bar
         self.status_frame = ttk.Frame(root, relief="sunken")
@@ -164,6 +168,37 @@ class FolderCompareApp:
         self.text_font.configure(family=self.default_text_font[0], size=self.default_text_font[1])
         self.left_list.config(font=self.text_font)
         self.right_list.config(font=self.text_font)
+
+    def about_and_help(self):
+        win = tk.Toplevel(self.root)
+        win.title('Help, About R2D2')
+        win.transient(self.root)
+        win.grab_set()
+        win.attributes("-topmost", True)
+
+        def on_close():
+            win.destroy()
+        win.protocol("WM_DELETE_WINDOW", on_close)
+
+        tk.Label(win, text="R2D2: A Folder Compare Tool").grid(row=0, column=0, padx=5, pady=5)
+        help_info = tk.Text(win, border=0, background="#f0f0f0", font=self.text_font)
+        help_info.grid(row=1, column=0, padx=5, pady=5)
+
+        help_info.insert('1.0', 'A GUI tool which is used to compare files in two different folders.\n')
+        help_info.insert(tk.END, 'Programmed by Python and Difflib.\n')
+        help_info.insert(tk.END, '\nButtons:')
+        help_info.insert(tk.END, '\nFirst/Prev/Next/Last Diff: Jump to the differences.')
+        help_info.insert(tk.END, '\nUI Font +/-: Adjust font size of UI.')
+        help_info.insert(tk.END, '\nContent Font +/-: Adjust font size of file content text.')
+        help_info.insert(tk.END, '\nChoose UI/Content Font: Select fonts of UI or file content text.')
+        help_info.insert(tk.END, '\nReset Font: Reset font settings.')
+        help_info.insert(tk.END, '\nHelp: Open this pop-up window.')
+        help_info.insert(tk.END, '\n')
+        help_info.insert(tk.END, '\nGreen: added lines (only in right)')
+        help_info.insert(tk.END, '\nRed: deleted lines (only in left)')
+        help_info.insert(tk.END, '\nYellow: modified lines')
+
+        ttk.Button(win, text="Close", command=on_close).grid(row=3, column=0, columnspan=2, pady=10)
 
     def open_font_dialog(self, target_font, dialog_attr, title, apply_callback=None):
         if getattr(self, dialog_attr, None) is not None:
@@ -235,19 +270,21 @@ class FolderCompareApp:
 
     # -------- File handling --------
     def load_folder(self, side):
-        folder = filedialog.askdirectory()
+        folder = filedialog.askdirectory(title="Open folder on "+side+" side")
         if not folder:
             return
         if side == "left":
+            self.left_topinfo.set("Left Folder: "+folder)
             self.left_folder = folder
             self.left_list.delete(0, tk.END)
-            for f in os.listdir(folder):
+            for f in sorted(os.listdir(folder)):
                 if os.path.isfile(os.path.join(folder, f)):
                     self.left_list.insert(tk.END, f)
         else:
+            self.right_topinfo.set("Right Folder: "+folder)
             self.right_folder = folder
             self.right_list.delete(0, tk.END)
-            for f in os.listdir(folder):
+            for f in sorted(os.listdir(folder)):
                 if os.path.isfile(os.path.join(folder, f)):
                     self.right_list.insert(tk.END, f)
 
