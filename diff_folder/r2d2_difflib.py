@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
+
 import tkinter as tk
 from tkinter import filedialog, ttk, font
 import os
 import difflib
-
 
 class FolderCompareApp:
     def __init__(self, root):
@@ -25,14 +26,21 @@ class FolderCompareApp:
         self.top_frame = ttk.Frame(self.paned)
         self.paned.add(self.top_frame, weight=1)
 
+        self.info_frame = ttk.Frame(self.top_frame, width=1, padding=5)
+        self.info_frame.pack(fill=tk.BOTH)
+        self.left_topinfo = tk.StringVar(value="<<")
+        self.left_label = ttk.Label(self.info_frame, textvariable=self.left_topinfo, font=self.ui_font)
+        self.left_label.pack(side="left", anchor="w")
+        self.right_topinfo = tk.StringVar(value=">>")
+        self.right_label = ttk.Label(self.info_frame, textvariable=self.right_topinfo, font=self.ui_font)
+        self.right_label.pack(side="right", anchor="e")
+
         self.left_frame = ttk.Frame(self.top_frame, padding=5)
         self.right_frame = ttk.Frame(self.top_frame, padding=5)
         self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Left side
-        self.left_topinfo = tk.StringVar(value="Left Folder")
-        ttk.Label(self.left_frame, textvariable=self.left_topinfo, font=self.ui_font).pack(anchor="w")
         self.left_btn = ttk.Button(self.left_frame, text="Select Folder", command=lambda: self.load_folder("left"))
         self.left_btn.pack(anchor="w", pady=2)
         self.left_list = tk.Listbox(self.left_frame, font=self.text_font, selectmode="browse",
@@ -41,10 +49,8 @@ class FolderCompareApp:
         self.left_list.bind("<<ListboxSelect>>", self.file_selected)
 
         # Right side
-        self.right_topinfo = tk.StringVar(value="Right Folder")
-        ttk.Label(self.right_frame, textvariable=self.right_topinfo, font=self.ui_font).pack(anchor="w")
         self.right_btn = ttk.Button(self.right_frame, text="Select Folder", command=lambda: self.load_folder("right"))
-        self.right_btn.pack(anchor="w", pady=2)
+        self.right_btn.pack(anchor="e", pady=2)
         self.right_list = tk.Listbox(self.right_frame, font=self.text_font, selectmode="browse",
                                      selectbackground="lightblue", exportselection=False)
         self.right_list.pack(fill=tk.BOTH, expand=True)
@@ -138,10 +144,11 @@ class FolderCompareApp:
         # Status bar
         self.status_frame = ttk.Frame(root, relief="sunken")
         self.status_frame.pack(fill="x", side=tk.BOTTOM)
-        self.status_left = ttk.Label(self.status_frame, text="No differences", anchor="w", font=self.ui_font)
-        self.status_left.pack(side="left", fill="x", expand=True)
+        self.status_left = ttk.Label(self.status_frame, text="No files selected.", anchor="w", font=self.ui_font)
+        self.status_left.pack(side="left", fill="x", expand=True, padx=1, pady=1)
+        self.status_left.bind("<Button-1>", self.on_mouse_click_status)
         self.status_right = ttk.Label(self.status_frame, text="", anchor="e", font=self.ui_font)
-        self.status_right.pack(side="right")
+        self.status_right.pack(side="right", padx=1, pady=1)
 
         # State
         self.left_folder = ""
@@ -194,9 +201,17 @@ class FolderCompareApp:
         help_info.insert(tk.END, '\nReset Font: Reset font settings.')
         help_info.insert(tk.END, '\nHelp: Open this pop-up window.')
         help_info.insert(tk.END, '\n')
+        help_info.insert(tk.END, '\nFile list:')
+        help_info.insert(tk.END, '\nGreen: identical files')
+        help_info.insert(tk.END, '\nLightblue: selected files')
+        help_info.insert(tk.END, '\n')
+        help_info.insert(tk.END, '\nContent text:')
         help_info.insert(tk.END, '\nGreen: added lines (only in right)')
         help_info.insert(tk.END, '\nRed: deleted lines (only in left)')
         help_info.insert(tk.END, '\nYellow: modified lines')
+        help_info.insert(tk.END, '\n')
+        help_info.insert(tk.END, '\nStatus bar:')
+        help_info.insert(tk.END, '\nOpen gvim to compare the selected files by clicking the status bar.')
 
         ttk.Button(win, text="Close", command=on_close).grid(row=3, column=0, columnspan=2, pady=10)
 
@@ -270,29 +285,86 @@ class FolderCompareApp:
 
     # -------- File handling --------
     def load_folder(self, side):
-        folder = filedialog.askdirectory(title="Open folder on "+side+" side")
-        if not folder:
+        def quick_compare_files(file1, file2):
+            with open(file1, "r", encoding="utf-8", errors="ignore") as f:
+                file1_lines = f.readlines()
+            with open(file2, "r", encoding="utf-8", errors="ignore") as f:
+                file2_lines = f.readlines()
+            matcher = difflib.SequenceMatcher(None, file1_lines, file2_lines)
+            opcodes = matcher.get_opcodes()
+            identical = True
+            for tag, i1, i2, j1, j2 in opcodes:
+                if tag == "equal": pass
+                else:
+                    identical = False
+                    break
+            return identical
+
+        CONFIG_FILE = os.path.expanduser("~/.r2d2."+side+".cfg")
+        last_dir = os.path.expanduser("~")
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                for line in f.readlines():
+                    last_dir = line.strip()
+                    break
+        folder = filedialog.askdirectory(title="Open folder on "+side+" side", initialdir=last_dir)
+        if folder:
+            with open(CONFIG_FILE, 'w') as f:
+                f.write(folder)
+        else:
             return
+
+        if self.left_folder and self.left_list:
+            for index in range(self.left_list.size()):
+                self.left_list.itemconfig(index, {'bg': ''})
+        if self.right_folder and self.right_list:
+            for index in range(self.right_list.size()):
+                self.right_list.itemconfig(index, {'bg': ''})
+
         if side == "left":
-            self.left_topinfo.set("Left Folder: "+folder)
+            self.left_topinfo.set(folder)
             self.left_folder = folder
             self.left_list.delete(0, tk.END)
             for f in sorted(os.listdir(folder)):
-                if os.path.isfile(os.path.join(folder, f)):
+                if os.path.isfile(os.path.join(folder, f)) and (not f.startswith('.')):
                     self.left_list.insert(tk.END, f)
+                    if self.right_folder and self.right_list:
+                        right_index = -1
+                        for index in range(self.right_list.size()):
+                            if self.right_list.get(index) == f:
+                                right_index = index
+                                break
+                        if right_index>-1:
+                            if quick_compare_files(os.path.join(folder, f), os.path.join(self.right_folder, f)):
+                                self.left_list.itemconfig(self.left_list.size()-1, {'bg': 'lightgreen'})
+                                self.right_list.itemconfig(right_index, {'bg': 'lightgreen'})
         else:
-            self.right_topinfo.set("Right Folder: "+folder)
+            self.right_topinfo.set(folder)
             self.right_folder = folder
             self.right_list.delete(0, tk.END)
             for f in sorted(os.listdir(folder)):
-                if os.path.isfile(os.path.join(folder, f)):
+                if os.path.isfile(os.path.join(folder, f)) and (not f.startswith('.')):
                     self.right_list.insert(tk.END, f)
+                    if self.left_folder and self.left_list:
+                        left_index = -1
+                        for index in range(self.left_list.size()):
+                            if self.left_list.get(index) == f:
+                                left_index = index
+                                break
+                        if left_index>-1:
+                            if quick_compare_files(os.path.join(folder, f), os.path.join(self.left_folder, f)):
+                                self.left_list.itemconfig(left_index, {'bg': 'lightgreen'})
+                                self.right_list.itemconfig(self.right_list.size()-1, {'bg': 'lightgreen'})
 
     def file_selected(self, event):
         if self.left_list.curselection():
             self.left_file = os.path.join(self.left_folder, self.left_list.get(self.left_list.curselection()))
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.left_file)
         if self.right_list.curselection():
             self.right_file = os.path.join(self.right_folder, self.right_list.get(self.right_list.curselection()))
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.right_file)
         if self.left_file and self.right_file:
             self.compare_files()
 
@@ -344,14 +416,11 @@ class FolderCompareApp:
         self.left_text.tag_config("current_diff", background="orange")
         self.right_text.tag_config("current_diff", background="orange")
 
-        left_name = os.path.basename(self.left_file)
-        right_name = os.path.basename(self.right_file)
+        self.status_left.config(text=f"Left: {self.left_file}\nRight: {self.right_file}")
         if self.diff_ranges:
-            self.status_left.config(text=f"Comparing: {left_name} <-> {right_name}")
-            self.status_right.config(text=f"{len(self.diff_ranges)} differences")
+            self.status_right.config(text=f"\n{len(self.diff_ranges)} differences")
         else:
-            self.status_left.config(text=f"Comparing: {left_name} <-> {right_name}")
-            self.status_right.config(text="Files are identical")
+            self.status_right.config(text="\nFiles are identical")
 
     # -------- Diff navigation --------
     def goto_diff(self, index):
@@ -376,7 +445,7 @@ class FolderCompareApp:
         self.left_line_numbers.see(f"{l_start}.0")
         self.right_line_numbers.see(f"{r_start}.0")
 
-        self.status_right.config(text=f"Diff {self.current_diff_index+1}/{len(self.diff_ranges)} "
+        self.status_right.config(text=f"Diff {self.current_diff_index+1}/{len(self.diff_ranges)}\n"
                                       f"(Left {l_start}-{l_end}, Right {r_start}-{r_end})")
 
     def goto_next_diff(self):
@@ -428,6 +497,10 @@ class FolderCompareApp:
         self.left_text.xview_scroll(delta, "units")
         self.right_text.xview_scroll(delta, "units")
         return "break"
+
+    def on_mouse_click_status(self, event):
+        if self.left_file and self.right_file:
+            os.system('gvim -d '+self.left_file+' '+self.right_file)
 
     def on_click_line(self, event):
         pass  # No special behavior for clicking lines
